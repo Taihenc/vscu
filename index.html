@@ -228,6 +228,7 @@
     <!-- Three.js CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
     <script>
@@ -236,8 +237,10 @@
             filename: 'vscu-3.glb',
             // Add alternative URLs here if needed (CDN, etc.)
             customUrls: [
-                // 'https://your-cdn.com/models/vscu-3.glb',
-                // 'https://your-backup-server.com/vscu-3.glb'
+                // Example external hosting options:
+                // 'https://github.com/Taihenc/vscu/releases/download/v1.0/vscu-3.glb', // GitHub Release
+                // 'https://your-cdn.com/models/vscu-3.glb', // CDN
+                // 'https://drive.google.com/uc?export=download&id=YOUR_FILE_ID', // Google Drive
             ]
         };
 
@@ -513,13 +516,17 @@
         function loadModel() {
             const loader = new THREE.GLTFLoader();
 
+            // Setup Draco loader for compressed models
+            const dracoLoader = new THREE.DRACOLoader();
+            dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+            dracoLoader.setDecoderConfig({ type: 'js' });
+            loader.setDRACOLoader(dracoLoader);
+
             // Dynamic URL detection based on current page location
             const modelUrls = getModelUrls();
 
             tryLoadModel(loader, modelUrls, 0);
-        }
-
-        function getModelUrls() {
+        } function getModelUrls() {
             const urls = [];
 
             // First try: Relative path (works locally and on most servers)
