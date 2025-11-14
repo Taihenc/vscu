@@ -238,7 +238,7 @@
             // Add alternative URLs here if needed (CDN, etc.)
             customUrls: [
                 // GitHub Releases (recommended for large files)
-                'https://github.com/Taihenc/vscu/releases/download/v1.0/vscu-3.glb',
+                'https://github.com/Taihenc/vscu/releases/download/beta/vscu-3.glb',
                 // Alternative hosting options:
                 // 'https://your-cdn.com/models/vscu-3.glb',
                 // 'https://drive.google.com/uc?export=download&id=YOUR_FILE_ID',
@@ -527,146 +527,149 @@
             const modelUrls = getModelUrls();
 
             tryLoadModel(loader, modelUrls, 0);
-        } function getModelUrls() {
-            const urls = [];
+            function getModelUrls() {
+                const urls = [];
 
-            // First try: Relative path (works locally and on most servers)
-            urls.push(`./${MODEL_CONFIG.filename}`);
-
-            // Add any custom URLs from configuration
-            urls.push(...MODEL_CONFIG.customUrls);
-
-            // If we're on GitHub Pages, construct the GitHub Pages URL (not raw URL)
-            if (window.location.hostname.includes('github.io')) {
-                const pathParts = window.location.pathname.split('/').filter(part => part);
-                if (pathParts.length > 0) {
-                    // Use GitHub Pages URL instead of raw URL
-                    // Format: https://username.github.io/repo-name/file.glb
-                    const baseUrl = `${window.location.protocol}//${window.location.hostname}`;
-                    const repoPath = pathParts[0];
-                    const pagesUrl = `${baseUrl}/${repoPath}/${MODEL_CONFIG.filename}`;
-                    urls.push(pagesUrl);
-                    console.log(`🔍 Detected GitHub Pages, using Pages URL: ${pagesUrl}`);
-
-                    // Also try the raw URL as fallback
-                    const username = window.location.hostname.split('.')[0];
-                    const repoName = pathParts[0];
-                    const rawUrl = `https://raw.githubusercontent.com/${username}/${repoName}/main/${MODEL_CONFIG.filename}`;
-                    urls.push(rawUrl);
-                    console.log(`� Added raw URL as fallback: ${rawUrl}`);
+                // First priority: Custom URLs (GitHub Releases, CDN, etc.) - TRY THESE FIRST!
+                if (MODEL_CONFIG.customUrls.length > 0) {
+                    console.log(`🎯 Trying GitHub Releases URL first: ${MODEL_CONFIG.customUrls[0]}`);
                 }
-            }
+                urls.push(...MODEL_CONFIG.customUrls);
 
-            // Alternative: Try to detect if we're in a subdirectory
-            const currentPath = window.location.pathname;
-            if (currentPath !== '/' && !currentPath.endsWith('/index.html')) {
-                // We might be in a subdirectory, try absolute path
-                const basePath = currentPath.substring(0, currentPath.lastIndexOf('/'));
-                urls.push(`${basePath}/${MODEL_CONFIG.filename}`);
-            }
+                // Second: Relative path (works locally)
+                urls.push(`./${MODEL_CONFIG.filename}`);
 
-            console.log(`📋 Will try loading from these URLs in order:`, urls);
-            return urls;
-        } function tryLoadModel(loader, urls, index) {
-            if (index >= urls.length) {
-                showError('Unable to load 3D model from any source. Please check if the GLB file exists in the repository.');
-                return;
-            }
+                // If we're on GitHub Pages, construct the GitHub Pages URL (not raw URL)
+                if (window.location.hostname.includes('github.io')) {
+                    const pathParts = window.location.pathname.split('/').filter(part => part);
+                    if (pathParts.length > 0) {
+                        // Use GitHub Pages URL instead of raw URL
+                        // Format: https://username.github.io/repo-name/file.glb
+                        const baseUrl = `${window.location.protocol}//${window.location.hostname}`;
+                        const repoPath = pathParts[0];
+                        const pagesUrl = `${baseUrl}/${repoPath}/${MODEL_CONFIG.filename}`;
+                        urls.push(pagesUrl);
+                        console.log(`🔍 Detected GitHub Pages, using Pages URL: ${pagesUrl}`);
 
-            const currentUrl = urls[index];
-            console.log(`Attempting to load model from: ${currentUrl}`);
-
-            // First check if file exists and is accessible
-            fetch(currentUrl, { method: 'HEAD' })
-                .then(response => {
-                    console.log(`File check for ${currentUrl}:`, response.status, response.headers.get('content-type'));
-                    if (!response.ok) {
-                        throw new Error(`GLB file not found at ${currentUrl} (${response.status})`);
+                        // Also try the raw URL as fallback
+                        const username = window.location.hostname.split('.')[0];
+                        const repoName = pathParts[0];
+                        const rawUrl = `https://raw.githubusercontent.com/${username}/${repoName}/main/${MODEL_CONFIG.filename}`;
+                        urls.push(rawUrl);
+                        console.log(`� Added raw URL as fallback: ${rawUrl}`);
                     }
-                    const contentType = response.headers.get('content-type');
-                    console.log('Content type:', contentType);
-                    return loadGLBModel(loader, currentUrl);
-                })
-                .catch(error => {
-                    console.warn(`Failed to load from ${currentUrl}:`, error);
-                    // Try next URL
-                    tryLoadModel(loader, urls, index + 1);
-                });
-        }
+                }
 
-        function loadGLBModel(loader, url) {
-            loader.load(
-                url,
-                function (gltf) {
-                    console.log(`✅ Model loaded successfully from: ${url}`);
-                    model = gltf.scene;
+                // Alternative: Try to detect if we're in a subdirectory
+                const currentPath = window.location.pathname;
+                if (currentPath !== '/' && !currentPath.endsWith('/index.html')) {
+                    // We might be in a subdirectory, try absolute path
+                    const basePath = currentPath.substring(0, currentPath.lastIndexOf('/'));
+                    urls.push(`${basePath}/${MODEL_CONFIG.filename}`);
+                }
 
-                    // Center and scale the model
-                    const box = new THREE.Box3().setFromObject(model);
-                    const center = box.getCenter(new THREE.Vector3());
-                    const size = box.getSize(new THREE.Vector3());
+                console.log(`📋 Will try loading from these URLs in order:`, urls);
+                return urls;
+            } function tryLoadModel(loader, urls, index) {
+                if (index >= urls.length) {
+                    showError('Unable to load 3D model from any source. Please check if the GLB file exists in the repository.');
+                    return;
+                }
 
-                    // Scale the model much larger for detailed view
-                    const maxDim = Math.max(size.x, size.y, size.z);
-                    const scale = 8 / maxDim; // Increased to 8 for much larger house
-                    model.scale.setScalar(scale);
+                const currentUrl = urls[index];
+                console.log(`Attempting to load model from: ${currentUrl}`);
 
-                    // Center the model
-                    model.position.sub(center.multiplyScalar(scale));
-
-                    // Set close camera position for detailed view
-                    const scaledSize = maxDim * scale;
-                    const cameraDistance = scaledSize * 0.7; // Much closer - 0.7x instead of 1.2x
-                    camera.position.set(
-                        cameraDistance * 0.8,  // X: slightly to the right
-                        cameraDistance * 0.4,  // Y: slightly above  
-                        cameraDistance * 0.9   // Z: close distance
-                    );
-
-                    // Update orbit controls for close-up viewing
-                    controls.minDistance = scaledSize * 0.1;  // Can get very close
-                    controls.maxDistance = scaledSize * 3;    // Reduced max distance
-                    controls.target.set(0, 0, 0); // Look at model center
-                    controls.update();
-
-                    // Fix materials for better Blender-like appearance
-                    fixMaterials(model);
-
-                    // Enable shadows
-                    model.traverse((child) => {
-                        if (child.isMesh) {
-                            child.castShadow = true;
-                            child.receiveShadow = true;
+                // First check if file exists and is accessible
+                fetch(currentUrl, { method: 'HEAD' })
+                    .then(response => {
+                        console.log(`File check for ${currentUrl}:`, response.status, response.headers.get('content-type'));
+                        if (!response.ok) {
+                            throw new Error(`GLB file not found at ${currentUrl} (${response.status})`);
                         }
+                        const contentType = response.headers.get('content-type');
+                        console.log('Content type:', contentType);
+                        return loadGLBModel(loader, currentUrl);
+                    })
+                    .catch(error => {
+                        console.warn(`Failed to load from ${currentUrl}:`, error);
+                        // Try next URL
+                        tryLoadModel(loader, urls, index + 1);
                     });
+            }
 
-                    scene.add(model);
+            function loadGLBModel(loader, url) {
+                loader.load(
+                    url,
+                    function (gltf) {
+                        console.log(`✅ Model loaded successfully from: ${url}`);
+                        model = gltf.scene;
 
-                    // Hide loading screen
-                    loading.style.display = 'none';
+                        // Center and scale the model
+                        const box = new THREE.Box3().setFromObject(model);
+                        const center = box.getCenter(new THREE.Vector3());
+                        const size = box.getSize(new THREE.Vector3());
 
-                    console.log('Model loaded successfully!');
-                    console.log('Model materials:', getMaterialInfo(model));
-                },
-                function (progress) {
-                    const url = progress.target ? progress.target.responseURL : 'unknown';
-                    console.log(`Loading progress from ${url}: ${(progress.loaded / progress.total * 100).toFixed(1)}%`);
-                },
-                function (error) {
-                    console.error('Error loading GLB model:', error);
-                    const currentUrl = error.target ? error.target.responseURL : 'unknown URL';
+                        // Scale the model much larger for detailed view
+                        const maxDim = Math.max(size.x, size.y, size.z);
+                        const scale = 8 / maxDim; // Increased to 8 for much larger house
+                        model.scale.setScalar(scale);
 
-                    if (error.message && error.message.includes('JSON')) {
-                        console.error(`Server returned HTML/JSON instead of GLB from: ${currentUrl}`);
+                        // Center the model
+                        model.position.sub(center.multiplyScalar(scale));
 
-                        // Check if this might be a Git LFS pointer file issue
-                        fetch(currentUrl)
-                            .then(response => response.text())
-                            .then(text => {
-                                console.log('Response content preview:', text.substring(0, 200));
+                        // Set close camera position for detailed view
+                        const scaledSize = maxDim * scale;
+                        const cameraDistance = scaledSize * 0.7; // Much closer - 0.7x instead of 1.2x
+                        camera.position.set(
+                            cameraDistance * 0.8,  // X: slightly to the right
+                            cameraDistance * 0.4,  // Y: slightly above  
+                            cameraDistance * 0.9   // Z: close distance
+                        );
 
-                                if (text.includes('version https://git-lfs.github.com') || text.includes('oid sha256:')) {
-                                    showError(`🔍 <strong>Git LFS Issue Detected!</strong><br><br>
+                        // Update orbit controls for close-up viewing
+                        controls.minDistance = scaledSize * 0.1;  // Can get very close
+                        controls.maxDistance = scaledSize * 3;    // Reduced max distance
+                        controls.target.set(0, 0, 0); // Look at model center
+                        controls.update();
+
+                        // Fix materials for better Blender-like appearance
+                        fixMaterials(model);
+
+                        // Enable shadows
+                        model.traverse((child) => {
+                            if (child.isMesh) {
+                                child.castShadow = true;
+                                child.receiveShadow = true;
+                            }
+                        });
+
+                        scene.add(model);
+
+                        // Hide loading screen
+                        loading.style.display = 'none';
+
+                        console.log('Model loaded successfully!');
+                        console.log('Model materials:', getMaterialInfo(model));
+                    },
+                    function (progress) {
+                        const url = progress.target ? progress.target.responseURL : 'unknown';
+                        console.log(`Loading progress from ${url}: ${(progress.loaded / progress.total * 100).toFixed(1)}%`);
+                    },
+                    function (error) {
+                        console.error('Error loading GLB model:', error);
+                        const currentUrl = error.target ? error.target.responseURL : 'unknown URL';
+
+                        if (error.message && error.message.includes('JSON')) {
+                            console.error(`Server returned HTML/JSON instead of GLB from: ${currentUrl}`);
+
+                            // Check if this might be a Git LFS pointer file issue
+                            fetch(currentUrl)
+                                .then(response => response.text())
+                                .then(text => {
+                                    console.log('Response content preview:', text.substring(0, 200));
+
+                                    if (text.includes('version https://git-lfs.github.com') || text.includes('oid sha256:')) {
+                                        showError(`🔍 <strong>Git LFS Issue Detected!</strong><br><br>
                                         Your GLB file is stored with Git LFS but GitHub is serving the pointer file instead of the binary.<br><br>
                                         <strong>Solutions:</strong><br>
                                         1. <strong>Enable Git LFS tracking:</strong><br>
@@ -676,133 +679,133 @@
                                         &nbsp;&nbsp;<code>git commit -m "Add LFS tracking"</code><br>
                                         &nbsp;&nbsp;<code>git push</code><br><br>
                                         2. <strong>Or upload to a file hosting service</strong> (like GitHub releases) and update the URL.`);
-                                } else if (text.toLowerCase().includes('<!doctype') || text.toLowerCase().includes('<html')) {
-                                    showError(`❌ <strong>File Not Found</strong><br><br>
+                                    } else if (text.toLowerCase().includes('<!doctype') || text.toLowerCase().includes('<html')) {
+                                        showError(`❌ <strong>File Not Found</strong><br><br>
                                         GitHub is returning an HTML 404 page instead of your GLB file.<br><br>
                                         <strong>Check:</strong><br>
                                         1. Is <code>vscu-3.glb</code> actually pushed to your GitHub repository?<br>
                                         2. Is the file name spelled correctly?<br>
                                         3. Try refreshing after a few minutes (GitHub Pages can be slow to update).`);
-                                } else {
-                                    showError(`📄 <strong>Unexpected Content</strong><br><br>
+                                    } else {
+                                        showError(`📄 <strong>Unexpected Content</strong><br><br>
                                         The file exists but contains unexpected content.<br>
                                         Content preview: <code>${text.substring(0, 100)}...</code><br><br>
                                         The GLB file may be corrupted or incorrectly uploaded.`);
-                                }
-                            })
-                            .catch(() => {
-                                showError('GLB file appears corrupted or server is returning wrong content type. Check if the file was uploaded correctly.');
-                            });
-                    } else {
-                        showError(`Failed to load 3D model from ${currentUrl}. Error: ${error.message}`);
+                                    }
+                                })
+                                .catch(() => {
+                                    showError('GLB file appears corrupted or server is returning wrong content type. Check if the file was uploaded correctly.');
+                                });
+                        } else {
+                            showError(`Failed to load 3D model from ${currentUrl}. Error: ${error.message}`);
+                        }
                     }
-                }
-            );
-        }
+                );
+            }
 
-        function showError(message) {
-            loading.style.display = 'none';
-            errorDiv.style.display = 'block';
-            errorDiv.innerHTML = `<h3>Failed to load 3D model</h3><div style="text-align: left; line-height: 1.4;">${message}</div>`;
-        }
+            function showError(message) {
+                loading.style.display = 'none';
+                errorDiv.style.display = 'block';
+                errorDiv.innerHTML = `<h3>Failed to load 3D model</h3><div style="text-align: left; line-height: 1.4;">${message}</div>`;
+            }
 
-        function fixMaterials(object) {
-            // Create environment map for reflections
-            const envMap = createEnvironmentMap();
+            function fixMaterials(object) {
+                // Create environment map for reflections
+                const envMap = createEnvironmentMap();
 
-            object.traverse((child) => {
-                if (child.isMesh && child.material) {
-                    const material = child.material;
+                object.traverse((child) => {
+                    if (child.isMesh && child.material) {
+                        const material = child.material;
 
-                    // Apply environment map for reflections
-                    if (material.envMap === null) {
-                        material.envMap = envMap;
-                        material.envMapIntensity = 1.0;
-                    }
-
-                    // Ensure proper PBR material settings
-                    if (material.isMeshStandardMaterial || material.isMeshPhysicalMaterial) {
-                        // Increase roughness slightly to reduce harsh reflections
-                        if (material.roughness < 0.1) {
-                            material.roughness = 0.1;
+                        // Apply environment map for reflections
+                        if (material.envMap === null) {
+                            material.envMap = envMap;
+                            material.envMapIntensity = 1.0;
                         }
 
-                        // Ensure metalness is preserved
-                        material.needsUpdate = true;
+                        // Ensure proper PBR material settings
+                        if (material.isMeshStandardMaterial || material.isMeshPhysicalMaterial) {
+                            // Increase roughness slightly to reduce harsh reflections
+                            if (material.roughness < 0.1) {
+                                material.roughness = 0.1;
+                            }
+
+                            // Ensure metalness is preserved
+                            material.needsUpdate = true;
+                        }
+
+                        // Log material properties for debugging
+                        console.log('Material:', material.name || 'Unnamed', {
+                            type: material.type,
+                            metalness: material.metalness,
+                            roughness: material.roughness,
+                            color: material.color ? material.color.getHex() : 'N/A',
+                            hasEnvMap: !!material.envMap
+                        });
                     }
+                });
+            }
 
-                    // Log material properties for debugging
-                    console.log('Material:', material.name || 'Unnamed', {
-                        type: material.type,
-                        metalness: material.metalness,
-                        roughness: material.roughness,
-                        color: material.color ? material.color.getHex() : 'N/A',
-                        hasEnvMap: !!material.envMap
-                    });
-                }
-            });
-        }
+            function createEnvironmentMap() {
+                // Create a simple environment map that matches our skybox
+                const cubeSize = 256;
+                const canvas = document.createElement('canvas');
+                canvas.width = cubeSize;
+                canvas.height = cubeSize;
+                const ctx = canvas.getContext('2d');
 
-        function createEnvironmentMap() {
-            // Create a simple environment map that matches our skybox
-            const cubeSize = 256;
-            const canvas = document.createElement('canvas');
-            canvas.width = cubeSize;
-            canvas.height = cubeSize;
-            const ctx = canvas.getContext('2d');
+                // Create gradient similar to skybox
+                const gradient = ctx.createLinearGradient(0, 0, 0, cubeSize);
+                gradient.addColorStop(0, '#87CEEB');
+                gradient.addColorStop(0.5, '#B0E0E6');
+                gradient.addColorStop(1, '#F0F8FF');
 
-            // Create gradient similar to skybox
-            const gradient = ctx.createLinearGradient(0, 0, 0, cubeSize);
-            gradient.addColorStop(0, '#87CEEB');
-            gradient.addColorStop(0.5, '#B0E0E6');
-            gradient.addColorStop(1, '#F0F8FF');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, cubeSize, cubeSize);
 
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, cubeSize, cubeSize);
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.mapping = THREE.EquirectangularReflectionMapping;
 
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.mapping = THREE.EquirectangularReflectionMapping;
+                return texture;
+            }
 
-            return texture;
-        }
+            function getMaterialInfo(object) {
+                const materials = [];
+                object.traverse((child) => {
+                    if (child.isMesh && child.material) {
+                        materials.push({
+                            name: child.material.name || 'Unnamed',
+                            type: child.material.type,
+                            metalness: child.material.metalness,
+                            roughness: child.material.roughness,
+                            color: child.material.color ? child.material.color.getHex() : null
+                        });
+                    }
+                });
+                return materials;
+            }
 
-        function getMaterialInfo(object) {
-            const materials = [];
-            object.traverse((child) => {
-                if (child.isMesh && child.material) {
-                    materials.push({
-                        name: child.material.name || 'Unnamed',
-                        type: child.material.type,
-                        metalness: child.material.metalness,
-                        roughness: child.material.roughness,
-                        color: child.material.color ? child.material.color.getHex() : null
-                    });
-                }
-            });
-            return materials;
-        }
+            function animate() {
+                requestAnimationFrame(animate);
 
-        function animate() {
-            requestAnimationFrame(animate);
+                // Update movement
+                updateMovement();
 
-            // Update movement
-            updateMovement();
+                // Update controls
+                controls.update();
 
-            // Update controls
-            controls.update();
+                // Render scene
+                renderer.render(scene, camera);
+            }
 
-            // Render scene
-            renderer.render(scene, camera);
-        }
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
 
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        // Initialize the 3D viewer
-        init();
+            // Initialize the 3D viewer
+            init();
     </script>
 </body>
 
