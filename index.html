@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Model Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow: hidden;
+        }
+
+        #container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #viewer {
+            width: 100%;
+            height: 100%;
+        }
+
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+        }
+
+        #controls h3 {
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        #controls p {
+            margin: 5px 0;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        #movement-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+        }
+
+        .movement-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 60px);
+            grid-template-rows: repeat(4, 50px);
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .move-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .move-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: scale(1.05);
+        }
+
+        .move-btn:active {
+            background: rgba(255, 255, 255, 0.4);
+            transform: scale(0.95);
+        }
+
+        .move-btn.pressed {
+            background: rgba(74, 144, 226, 0.6);
+            border-color: rgba(74, 144, 226, 0.8);
+        }
+
+        .movement-label {
+            color: white;
+            font-size: 12px;
+            text-align: center;
+            opacity: 0.8;
+            margin-bottom: 10px;
+        }
+
+        /* Position specific buttons */
+        .btn-up {
+            grid-column: 2;
+            grid-row: 1;
+        }
+
+        .btn-left {
+            grid-column: 1;
+            grid-row: 2;
+        }
+
+        .btn-down {
+            grid-column: 2;
+            grid-row: 2;
+        }
+
+        .btn-right {
+            grid-column: 3;
+            grid-row: 2;
+        }
+
+        .btn-forward {
+            grid-column: 2;
+            grid-row: 3;
+        }
+
+        .btn-backward {
+            grid-column: 2;
+            grid-row: 4;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 24px;
+            z-index: 200;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        #error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff6b6b;
+            font-size: 18px;
+            text-align: center;
+            z-index: 200;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <div id="loading">
+            <div class="spinner"></div>
+            <div>Loading 3D Model...</div>
+        </div>
+
+        <div id="error">
+            <h3>Failed to load 3D model</h3>
+            <p>Please check the console for more details</p>
+        </div>
+
+        <div id="controls">
+            <h3>🎮 Controls</h3>
+            <p>🖱️ Left Click + Drag: Rotate</p>
+            <p>🖱️ Right Click + Drag: Pan</p>
+            <p>🔄 Scroll: Zoom</p>
+            <p>📱 Touch: Pinch to zoom, drag to rotate</p>
+            <p>⌨️ WASD: Move around</p>
+        </div>
+
+        <div id="movement-controls">
+            <div class="movement-label">Movement Controls</div>
+            <div class="movement-grid">
+                <button class="move-btn btn-up" data-direction="up">↑</button>
+                <button class="move-btn btn-left" data-direction="left">←</button>
+                <button class="move-btn btn-down" data-direction="down">↓</button>
+                <button class="move-btn btn-right" data-direction="right">→</button>
+                <button class="move-btn btn-forward" data-direction="forward">W</button>
+                <button class="move-btn btn-backward" data-direction="backward">S</button>
+            </div>
+            <div class="movement-label">Up/Down | Left/Right | Forward/Back</div>
+        </div>
+
+        <div id="viewer"></div>
+    </div>
+
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // Scene setup
+        let scene, camera, renderer, controls, model;
+        let container = document.getElementById('viewer');
+        let loading = document.getElementById('loading');
+        let errorDiv = document.getElementById('error');
+
+        // Movement system
+        let moveState = {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false,
+            up: false,
+            down: false
+        };
+        const moveSpeed = 0.01;
+
+        function init() {
+            // Create scene
+            scene = new THREE.Scene();
+            // No need for background color since we have skybox
+
+            // Create camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
+            camera.position.set(2, 1.5, 2); // Much closer initial position
+
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.0;
+            container.appendChild(renderer.domElement);
+
+            // Add orbit controls for close-up viewing
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.screenSpacePanning = false;
+            controls.minDistance = 0.05; // Can get very close to details
+            controls.maxDistance = 15;   // Reduced max distance
+            controls.maxPolarAngle = Math.PI;
+
+            // Add lights
+            setupLighting();
+
+            // Load 3D model
+            loadModel();
+
+            // Start animation loop
+            animate();
+
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize);
+
+            // Setup movement controls
+            setupMovementControls();
+        }
+
+        function setupMovementControls() {
+            // Button controls
+            const moveButtons = document.querySelectorAll('.move-btn');
+            moveButtons.forEach(button => {
+                const direction = button.dataset.direction;
+
+                // Mouse events
+                button.addEventListener('mousedown', () => {
+                    moveState[direction] = true;
+                    button.classList.add('pressed');
+                });
+
+                button.addEventListener('mouseup', () => {
+                    moveState[direction] = false;
+                    button.classList.remove('pressed');
+                });
+
+                button.addEventListener('mouseleave', () => {
+                    moveState[direction] = false;
+                    button.classList.remove('pressed');
+                });
+
+                // Touch events for mobile
+                button.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    moveState[direction] = true;
+                    button.classList.add('pressed');
+                });
+
+                button.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    moveState[direction] = false;
+                    button.classList.remove('pressed');
+                });
+            });
+
+            // Keyboard controls
+            document.addEventListener('keydown', (event) => {
+                switch (event.code) {
+                    case 'KeyW': case 'ArrowUp':
+                        moveState.forward = true;
+                        highlightButton('forward');
+                        break;
+                    case 'KeyS': case 'ArrowDown':
+                        moveState.backward = true;
+                        highlightButton('backward');
+                        break;
+                    case 'KeyA': case 'ArrowLeft':
+                        moveState.left = true;
+                        highlightButton('left');
+                        break;
+                    case 'KeyD': case 'ArrowRight':
+                        moveState.right = true;
+                        highlightButton('right');
+                        break;
+                    case 'KeyQ': case 'Space':
+                        moveState.up = true;
+                        highlightButton('up');
+                        break;
+                    case 'KeyE': case 'ShiftLeft':
+                        moveState.down = true;
+                        highlightButton('down');
+                        break;
+                }
+            });
+
+            document.addEventListener('keyup', (event) => {
+                switch (event.code) {
+                    case 'KeyW': case 'ArrowUp':
+                        moveState.forward = false;
+                        unhighlightButton('forward');
+                        break;
+                    case 'KeyS': case 'ArrowDown':
+                        moveState.backward = false;
+                        unhighlightButton('backward');
+                        break;
+                    case 'KeyA': case 'ArrowLeft':
+                        moveState.left = false;
+                        unhighlightButton('left');
+                        break;
+                    case 'KeyD': case 'ArrowRight':
+                        moveState.right = false;
+                        unhighlightButton('right');
+                        break;
+                    case 'KeyQ': case 'Space':
+                        moveState.up = false;
+                        unhighlightButton('up');
+                        break;
+                    case 'KeyE': case 'ShiftLeft':
+                        moveState.down = false;
+                        unhighlightButton('down');
+                        break;
+                }
+            });
+        }
+
+        function highlightButton(direction) {
+            const button = document.querySelector(`[data-direction="${direction}"]`);
+            if (button) button.classList.add('pressed');
+        }
+
+        function unhighlightButton(direction) {
+            const button = document.querySelector(`[data-direction="${direction}"]`);
+            if (button) button.classList.remove('pressed');
+        }
+
+        function updateMovement() {
+            if (!camera || !controls) return;
+
+            // Get camera's local axes
+            const direction = new THREE.Vector3();
+            const right = new THREE.Vector3();
+            const up = new THREE.Vector3(0, 1, 0);
+
+            // Get camera forward direction
+            camera.getWorldDirection(direction);
+            direction.y = 0; // Keep movement horizontal
+            direction.normalize();
+
+            // Get camera right direction
+            right.crossVectors(direction, up).normalize();
+
+            // Calculate movement vector
+            const moveVector = new THREE.Vector3();
+
+            if (moveState.forward) moveVector.add(direction.clone().multiplyScalar(moveSpeed));
+            if (moveState.backward) moveVector.add(direction.clone().multiplyScalar(-moveSpeed));
+            if (moveState.left) moveVector.add(right.clone().multiplyScalar(-moveSpeed));
+            if (moveState.right) moveVector.add(right.clone().multiplyScalar(moveSpeed));
+            if (moveState.up) moveVector.y += moveSpeed;
+            if (moveState.down) moveVector.y -= moveSpeed;
+
+            // Apply movement to camera
+            if (moveVector.length() > 0) {
+                camera.position.add(moveVector);
+                controls.target.add(moveVector);
+                controls.update();
+            }
+        }
+
+        function setupLighting() {
+            // Create skybox with gradient
+            createSkybox();
+
+            // Ambient light - increased intensity
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+            scene.add(ambientLight);
+
+            // Main directional light (sun)
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            directionalLight.position.set(10, 10, 5);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            directionalLight.shadow.camera.near = 0.1;
+            directionalLight.shadow.camera.far = 50;
+            directionalLight.shadow.camera.left = -10;
+            directionalLight.shadow.camera.right = 10;
+            directionalLight.shadow.camera.top = 10;
+            directionalLight.shadow.camera.bottom = -10;
+            scene.add(directionalLight);
+
+            // Fill light from opposite direction
+            const fillLight = new THREE.DirectionalLight(0x87ceeb, 0.8);
+            fillLight.position.set(-10, 5, -5);
+            scene.add(fillLight);
+
+            // Point lights for additional illumination
+            const pointLight1 = new THREE.PointLight(0xffffff, 0.8);
+            pointLight1.position.set(-10, 10, -10);
+            scene.add(pointLight1);
+
+            const pointLight2 = new THREE.PointLight(0xffd700, 0.6);
+            pointLight2.position.set(5, -5, 10);
+            scene.add(pointLight2);
+        }
+
+        function createSkybox() {
+            // Create skybox geometry
+            const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
+
+            // Create gradient texture for skybox
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            // Create gradient
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#87CEEB');  // Sky blue at top
+            gradient.addColorStop(0.3, '#98D8E8'); // Light blue
+            gradient.addColorStop(0.7, '#F0F8FF'); // Alice blue
+            gradient.addColorStop(1, '#FFFFFF');   // White at bottom
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const skyMaterial = new THREE.MeshBasicMaterial({
+                map: texture,
+                side: THREE.BackSide
+            });
+
+            const skybox = new THREE.Mesh(skyGeometry, skyMaterial);
+            scene.add(skybox);
+        }
+
+        function loadModel() {
+            const loader = new THREE.GLTFLoader();
+
+            loader.load(
+                './vscu-3.glb',
+                function (gltf) {
+                    model = gltf.scene;
+
+                    // Center and scale the model
+                    const box = new THREE.Box3().setFromObject(model);
+                    const center = box.getCenter(new THREE.Vector3());
+                    const size = box.getSize(new THREE.Vector3());
+
+                    // Scale the model much larger for detailed view
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    const scale = 8 / maxDim; // Increased to 8 for much larger house
+                    model.scale.setScalar(scale);
+
+                    // Center the model
+                    model.position.sub(center.multiplyScalar(scale));
+
+                    // Set close camera position for detailed view
+                    const scaledSize = maxDim * scale;
+                    const cameraDistance = scaledSize * 0.7; // Much closer - 0.7x instead of 1.2x
+                    camera.position.set(
+                        cameraDistance * 0.8,  // X: slightly to the right
+                        cameraDistance * 0.4,  // Y: slightly above  
+                        cameraDistance * 0.9   // Z: close distance
+                    );
+
+                    // Update orbit controls for close-up viewing
+                    controls.minDistance = scaledSize * 0.1;  // Can get very close
+                    controls.maxDistance = scaledSize * 3;    // Reduced max distance
+                    controls.target.set(0, 0, 0); // Look at model center
+                    controls.update();
+
+                    // Fix materials for better Blender-like appearance
+                    fixMaterials(model);
+
+                    // Enable shadows
+                    model.traverse((child) => {
+                        if (child.isMesh) {
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                        }
+                    });
+
+                    scene.add(model);
+
+                    // Hide loading screen
+                    loading.style.display = 'none';
+
+                    console.log('Model loaded successfully!');
+                    console.log('Model materials:', getMaterialInfo(model));
+                },
+                function (progress) {
+                    console.log('Loading progress: ', (progress.loaded / progress.total * 100) + '%');
+                },
+                function (error) {
+                    console.error('Error loading model:', error);
+                    loading.style.display = 'none';
+                    errorDiv.style.display = 'block';
+                }
+            );
+        }
+
+        function fixMaterials(object) {
+            // Create environment map for reflections
+            const envMap = createEnvironmentMap();
+
+            object.traverse((child) => {
+                if (child.isMesh && child.material) {
+                    const material = child.material;
+
+                    // Apply environment map for reflections
+                    if (material.envMap === null) {
+                        material.envMap = envMap;
+                        material.envMapIntensity = 1.0;
+                    }
+
+                    // Ensure proper PBR material settings
+                    if (material.isMeshStandardMaterial || material.isMeshPhysicalMaterial) {
+                        // Increase roughness slightly to reduce harsh reflections
+                        if (material.roughness < 0.1) {
+                            material.roughness = 0.1;
+                        }
+
+                        // Ensure metalness is preserved
+                        material.needsUpdate = true;
+                    }
+
+                    // Log material properties for debugging
+                    console.log('Material:', material.name || 'Unnamed', {
+                        type: material.type,
+                        metalness: material.metalness,
+                        roughness: material.roughness,
+                        color: material.color ? material.color.getHex() : 'N/A',
+                        hasEnvMap: !!material.envMap
+                    });
+                }
+            });
+        }
+
+        function createEnvironmentMap() {
+            // Create a simple environment map that matches our skybox
+            const cubeSize = 256;
+            const canvas = document.createElement('canvas');
+            canvas.width = cubeSize;
+            canvas.height = cubeSize;
+            const ctx = canvas.getContext('2d');
+
+            // Create gradient similar to skybox
+            const gradient = ctx.createLinearGradient(0, 0, 0, cubeSize);
+            gradient.addColorStop(0, '#87CEEB');
+            gradient.addColorStop(0.5, '#B0E0E6');
+            gradient.addColorStop(1, '#F0F8FF');
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, cubeSize, cubeSize);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+
+            return texture;
+        }
+
+        function getMaterialInfo(object) {
+            const materials = [];
+            object.traverse((child) => {
+                if (child.isMesh && child.material) {
+                    materials.push({
+                        name: child.material.name || 'Unnamed',
+                        type: child.material.type,
+                        metalness: child.material.metalness,
+                        roughness: child.material.roughness,
+                        color: child.material.color ? child.material.color.getHex() : null
+                    });
+                }
+            });
+            return materials;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Update movement
+            updateMovement();
+
+            // Update controls
+            controls.update();
+
+            // Render scene
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Initialize the 3D viewer
+        init();
+    </script>
+</body>
+
+</html>
