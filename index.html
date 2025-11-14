@@ -231,6 +231,16 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
     <script>
+        // Configuration - easily customizable
+        const MODEL_CONFIG = {
+            filename: 'vscu-3.glb',
+            // Add alternative URLs here if needed (CDN, etc.)
+            customUrls: [
+                // 'https://your-cdn.com/models/vscu-3.glb',
+                // 'https://your-backup-server.com/vscu-3.glb'
+            ]
+        };
+
         // Scene setup
         let scene, camera, renderer, controls, model;
         let container = document.getElementById('viewer');
@@ -503,9 +513,79 @@
         function loadModel() {
             const loader = new THREE.GLTFLoader();
 
+            // Dynamic URL detection based on current page location
+            const modelUrls = getModelUrls();
+
+            tryLoadModel(loader, modelUrls, 0);
+        }
+
+        function getModelUrls() {
+            const urls = [];
+
+            // First try: Relative path (works locally and on most servers)
+            urls.push(`./${MODEL_CONFIG.filename}`);
+
+            // Add any custom URLs from configuration
+            urls.push(...MODEL_CONFIG.customUrls);
+
+            // If we're on GitHub Pages, try to construct the raw URL dynamically
+            if (window.location.hostname.includes('github.io')) {
+                const pathParts = window.location.pathname.split('/').filter(part => part);
+                if (pathParts.length > 0) {
+                    // Extract username and repo from GitHub Pages URL
+                    // Format: https://username.github.io/repo-name/
+                    const username = window.location.hostname.split('.')[0];
+                    const repoName = pathParts[0];
+                    const rawUrl = `https://raw.githubusercontent.com/${username}/${repoName}/main/${MODEL_CONFIG.filename}`;
+                    urls.push(rawUrl);
+                    console.log(`🔍 Detected GitHub Pages, constructed raw URL: ${rawUrl}`);
+                }
+            }
+
+            // Alternative: Try to detect if we're in a subdirectory
+            const currentPath = window.location.pathname;
+            if (currentPath !== '/' && !currentPath.endsWith('/index.html')) {
+                // We might be in a subdirectory, try absolute path
+                const basePath = currentPath.substring(0, currentPath.lastIndexOf('/'));
+                urls.push(`${basePath}/${MODEL_CONFIG.filename}`);
+            }
+
+            console.log(`📋 Will try loading from these URLs in order:`, urls);
+            return urls;
+        }
+
+        function tryLoadModel(loader, urls, index) {
+            if (index >= urls.length) {
+                showError('Unable to load 3D model from any source. Please check if the GLB file exists in the repository.');
+                return;
+            }
+
+            const currentUrl = urls[index];
+            console.log(`Attempting to load model from: ${currentUrl}`);
+
+            // First check if file exists and is accessible
+            fetch(currentUrl, { method: 'HEAD' })
+                .then(response => {
+                    console.log(`File check for ${currentUrl}:`, response.status, response.headers.get('content-type'));
+                    if (!response.ok) {
+                        throw new Error(`GLB file not found at ${currentUrl} (${response.status})`);
+                    }
+                    const contentType = response.headers.get('content-type');
+                    console.log('Content type:', contentType);
+                    return loadGLBModel(loader, currentUrl);
+                })
+                .catch(error => {
+                    console.warn(`Failed to load from ${currentUrl}:`, error);
+                    // Try next URL
+                    tryLoadModel(loader, urls, index + 1);
+                });
+        }
+
+        function loadGLBModel(loader, url) {
             loader.load(
-                './vscu-3.glb',
+                url,
                 function (gltf) {
+                    console.log(`✅ Model loaded successfully from: ${url}`);
                     model = gltf.scene;
 
                     // Center and scale the model
@@ -556,14 +636,33 @@
                     console.log('Model materials:', getMaterialInfo(model));
                 },
                 function (progress) {
-                    console.log('Loading progress: ', (progress.loaded / progress.total * 100) + '%');
+                    const url = progress.target ? progress.target.responseURL : 'unknown';
+                    console.log(`Loading progress from ${url}: ${(progress.loaded / progress.total * 100).toFixed(1)}%`);
                 },
                 function (error) {
-                    console.error('Error loading model:', error);
-                    loading.style.display = 'none';
-                    errorDiv.style.display = 'block';
+                    console.error('Error loading GLB model:', error);
+                    const currentUrl = error.target ? error.target.responseURL : 'unknown URL';
+
+                    if (error.message && error.message.includes('JSON')) {
+                        console.error(`Server returned HTML/JSON instead of GLB from: ${currentUrl}`);
+                        // Try next URL if this was from GitHub raw
+                        if (currentUrl.includes('raw.githubusercontent.com')) {
+                            console.log('GitHub raw URL failed, trying local path...');
+                            tryLoadModel(loader, ['./vscu-3.glb'], 0);
+                        } else {
+                            showError('GLB file appears corrupted or server is returning wrong content type. Check if the file was uploaded correctly.');
+                        }
+                    } else {
+                        showError(`Failed to load 3D model from ${currentUrl}. Error: ${error.message}`);
+                    }
                 }
             );
+        }
+
+        function showError(message) {
+            loading.style.display = 'none';
+            errorDiv.style.display = 'block';
+            errorDiv.innerHTML = `<h3>Failed to load 3D model</h3><p>${message}</p>`;
         }
 
         function fixMaterials(object) {
