@@ -235,13 +235,14 @@
         // Configuration - easily customizable
         const MODEL_CONFIG = {
             filename: 'vscu-3.glb',
-            // Add alternative URLs here if needed (CDN, etc.)
+            // CORS-friendly URLs (try these first to avoid CORS issues)
             customUrls: [
-                // GitHub Releases (recommended for large files)
-                'https://github.com/Taihenc/vscu/releases/download/beta/vscu-3.glb',
-                // Alternative hosting options:
-                // 'https://your-cdn.com/models/vscu-3.glb',
-                // 'https://drive.google.com/uc?export=download&id=YOUR_FILE_ID',
+                // JSDelivr CDN - excellent CORS support, caches GitHub files
+                'https://cdn.jsdelivr.net/gh/Taihenc/vscu@main/vscu-3.glb',
+                // Raw GitHub - better CORS than releases
+                'https://raw.githubusercontent.com/Taihenc/vscu/main/vscu-3.glb',
+                // GitHub Releases (has CORS issues, commented out)
+                // 'https://github.com/Taihenc/vscu/releases/download/beta/vscu-3.glb',
             ]
         };
 
