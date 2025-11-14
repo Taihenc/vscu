@@ -528,17 +528,24 @@
             // Add any custom URLs from configuration
             urls.push(...MODEL_CONFIG.customUrls);
 
-            // If we're on GitHub Pages, try to construct the raw URL dynamically
+            // If we're on GitHub Pages, construct the GitHub Pages URL (not raw URL)
             if (window.location.hostname.includes('github.io')) {
                 const pathParts = window.location.pathname.split('/').filter(part => part);
                 if (pathParts.length > 0) {
-                    // Extract username and repo from GitHub Pages URL
-                    // Format: https://username.github.io/repo-name/
+                    // Use GitHub Pages URL instead of raw URL
+                    // Format: https://username.github.io/repo-name/file.glb
+                    const baseUrl = `${window.location.protocol}//${window.location.hostname}`;
+                    const repoPath = pathParts[0];
+                    const pagesUrl = `${baseUrl}/${repoPath}/${MODEL_CONFIG.filename}`;
+                    urls.push(pagesUrl);
+                    console.log(`🔍 Detected GitHub Pages, using Pages URL: ${pagesUrl}`);
+
+                    // Also try the raw URL as fallback
                     const username = window.location.hostname.split('.')[0];
                     const repoName = pathParts[0];
                     const rawUrl = `https://raw.githubusercontent.com/${username}/${repoName}/main/${MODEL_CONFIG.filename}`;
                     urls.push(rawUrl);
-                    console.log(`🔍 Detected GitHub Pages, constructed raw URL: ${rawUrl}`);
+                    console.log(`� Added raw URL as fallback: ${rawUrl}`);
                 }
             }
 
@@ -552,9 +559,7 @@
 
             console.log(`📋 Will try loading from these URLs in order:`, urls);
             return urls;
-        }
-
-        function tryLoadModel(loader, urls, index) {
+        } function tryLoadModel(loader, urls, index) {
             if (index >= urls.length) {
                 showError('Unable to load 3D model from any source. Please check if the GLB file exists in the repository.');
                 return;
@@ -645,13 +650,41 @@
 
                     if (error.message && error.message.includes('JSON')) {
                         console.error(`Server returned HTML/JSON instead of GLB from: ${currentUrl}`);
-                        // Try next URL if this was from GitHub raw
-                        if (currentUrl.includes('raw.githubusercontent.com')) {
-                            console.log('GitHub raw URL failed, trying local path...');
-                            tryLoadModel(loader, ['./vscu-3.glb'], 0);
-                        } else {
-                            showError('GLB file appears corrupted or server is returning wrong content type. Check if the file was uploaded correctly.');
-                        }
+
+                        // Check if this might be a Git LFS pointer file issue
+                        fetch(currentUrl)
+                            .then(response => response.text())
+                            .then(text => {
+                                console.log('Response content preview:', text.substring(0, 200));
+
+                                if (text.includes('version https://git-lfs.github.com') || text.includes('oid sha256:')) {
+                                    showError(`🔍 <strong>Git LFS Issue Detected!</strong><br><br>
+                                        Your GLB file is stored with Git LFS but GitHub is serving the pointer file instead of the binary.<br><br>
+                                        <strong>Solutions:</strong><br>
+                                        1. <strong>Enable Git LFS tracking:</strong><br>
+                                        &nbsp;&nbsp;<code>git lfs track "*.glb"</code><br>
+                                        &nbsp;&nbsp;<code>git add .gitattributes</code><br>
+                                        &nbsp;&nbsp;<code>git add vscu-3.glb</code><br>
+                                        &nbsp;&nbsp;<code>git commit -m "Add LFS tracking"</code><br>
+                                        &nbsp;&nbsp;<code>git push</code><br><br>
+                                        2. <strong>Or upload to a file hosting service</strong> (like GitHub releases) and update the URL.`);
+                                } else if (text.toLowerCase().includes('<!doctype') || text.toLowerCase().includes('<html')) {
+                                    showError(`❌ <strong>File Not Found</strong><br><br>
+                                        GitHub is returning an HTML 404 page instead of your GLB file.<br><br>
+                                        <strong>Check:</strong><br>
+                                        1. Is <code>vscu-3.glb</code> actually pushed to your GitHub repository?<br>
+                                        2. Is the file name spelled correctly?<br>
+                                        3. Try refreshing after a few minutes (GitHub Pages can be slow to update).`);
+                                } else {
+                                    showError(`📄 <strong>Unexpected Content</strong><br><br>
+                                        The file exists but contains unexpected content.<br>
+                                        Content preview: <code>${text.substring(0, 100)}...</code><br><br>
+                                        The GLB file may be corrupted or incorrectly uploaded.`);
+                                }
+                            })
+                            .catch(() => {
+                                showError('GLB file appears corrupted or server is returning wrong content type. Check if the file was uploaded correctly.');
+                            });
                     } else {
                         showError(`Failed to load 3D model from ${currentUrl}. Error: ${error.message}`);
                     }
@@ -662,7 +695,7 @@
         function showError(message) {
             loading.style.display = 'none';
             errorDiv.style.display = 'block';
-            errorDiv.innerHTML = `<h3>Failed to load 3D model</h3><p>${message}</p>`;
+            errorDiv.innerHTML = `<h3>Failed to load 3D model</h3><div style="text-align: left; line-height: 1.4;">${message}</div>`;
         }
 
         function fixMaterials(object) {
